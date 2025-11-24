@@ -7,6 +7,11 @@ const socketAuth = require("./middleware/socketAuth");
 const app = express();
 const server = http.createServer(app);
 
+app.get("/", (req, res) => {
+  res.send("Backend de chat corriendo");
+});
+
+
 const io = new Server(server, {
   cors: {
     origin: "*",
