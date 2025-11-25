@@ -22,7 +22,22 @@ function setupSockets(io) {
             socket.join(meetingId);
             const history = await MessageDAO.getMessages(meetingId);
             socket.emit("chat-history", history);
-            socket.to(meetingId).emit("user-joined", { userId: uid });
+            
+            let userName = 'Usuario'
+            try {
+                const userDoc = await db.collecion('users').doc(uid).get()
+                if (userDoc.exists) {
+                    const data = userDoc.data()
+                    if (data?.displayName) userName = data.displayName
+                }
+            } catch (error) {
+                console.error("Error al obtener el nombre del usuario:", error)
+            }
+
+            socket.to(meetingId).emit("user-joined", { 
+                userId: uid,
+                userName
+            });
         });
 
         /**
