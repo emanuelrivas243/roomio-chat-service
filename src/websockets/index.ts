@@ -1,5 +1,6 @@
 const { Server, Socket } = require("socket.io");
 const MessageDAO = require("../dao/MessageDAO");
+const { db } = require("../firebase");
 
 /**
  * Configura los sockets para chat y reuniones.
@@ -30,9 +31,13 @@ function setupSockets(io) {
          */
         socket.on("send-message", async (data) => {
             const { meetingId, message } = data;
+            const userDoc = await db.collection("users").doc(socket.uid).get();
+            const userData = userDoc.exists ? userDoc.data() : { displayName: "Usuario" };
+
             const payload = {
                 meetingId,
-                senderId: uid,
+                senderId: socket.uid,
+                userName: userData.displayName,
                 message,
                 time: new Date().toISOString(),
             };
