@@ -76,8 +76,9 @@ function setupSockets(io) {
         });
 
         // CUANDO UN USUARIO SE DESCONECTA
-        socket.on("disconnect", () => {
+        socket.on("disconnect", async () => {
             console.log("Disconnected", socket.id);
+            const userName = await getUserName()
 
             // Buscar en qué reunión estaba
             for (const meetingId of Object.keys(participants)) {
@@ -93,9 +94,6 @@ function setupSockets(io) {
 
                 // Si lo eliminamos, emitimos user-left y actualizamos la lista
                 if (before !== after) {
-                    // Obtener el nombre ANTES de eliminarlo
-                    const removedUser = beforeList.find(p => p.userId === uid);
-                    const userName = removedUser?.userName || "Usuario";
 
                     io.to(meetingId).emit("user-left", {
                         userId: uid,
