@@ -81,10 +81,11 @@ function setupSockets(io) {
 
             // Buscar en qué reunión estaba
             for (const meetingId of Object.keys(participants)) {
+                const beforeList = participants[meetingId]
                 const before = participants[meetingId].length;
 
                 // filtrar usuario fuera
-                participants[meetingId] = participants[meetingId].filter(
+                participants[meetingId] = beforeList.filter(
                     p => p.userId !== uid
                 );
 
@@ -92,9 +93,18 @@ function setupSockets(io) {
 
                 // Si lo eliminamos, emitimos user-left y actualizamos la lista
                 if (before !== after) {
-                    io.to(meetingId).emit("user-left", { userId: uid });
+                    // Obtener el nombre ANTES de eliminarlo
+                    const removedUser = beforeList.find(p => p.userId === uid);
+                    const userName = removedUser?.userName || "Usuario";
+
+                    io.to(meetingId).emit("user-left", {
+                        userId: uid,
+                        userName
+                    });
+
                     io.to(meetingId).emit("participants", participants[meetingId]);
-                    console.log(`User ${uid} left meeting ${meetingId}`);
+
+                    console.log(`User ${userName} (${uid}) left meeting ${meetingId}`);
                 }
             }
         });
