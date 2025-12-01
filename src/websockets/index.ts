@@ -29,7 +29,7 @@ const participants = {};
  */
 function setupSockets(io) {
     io.on("connection", (socket) => {
-        const uid = socket.uid;
+        const uid = socket.handshake.query.uid;
         console.log("Connected", socket.id, "uid:", uid);
 
         /**
@@ -97,7 +97,7 @@ function setupSockets(io) {
         socket.on("send-message", async (data) => {
             const { meetingId, message } = data;
 
-            const userDoc = await db.collection("users").doc(socket.uid).get();
+            const userDoc = await db.collection("users").doc(uid).get();
             const userData = userDoc.exists ? userDoc.data() : { displayName: "User" };
 
             /**
@@ -112,7 +112,7 @@ function setupSockets(io) {
              */
             const payload = {
                 meetingId,
-                senderId: socket.uid,
+                senderId: uid,
                 userName: userData.displayName,
                 message,
                 time: new Date().toISOString(),
