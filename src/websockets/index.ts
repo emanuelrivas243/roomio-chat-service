@@ -30,7 +30,15 @@ const participants = {};
 function setupSockets(io) {
     io.on("connection", (socket) => {
         const uid = socket.handshake.query.uid;
-        console.log("Connected", socket.id, "uid:", uid);
+        
+        // ✅ VALIDACIÓN CRÍTICA: Rechazar conexiones sin uid válido
+        if (!uid || uid === 'undefined' || uid === 'null') {
+            console.error("❌ Conexión rechazada: uid inválido", socket.id);
+            socket.disconnect(true);
+            return;
+        }
+        
+        console.log("✅ Connected", socket.id, "uid:", uid);
 
         /**
          * Retrieves the display name and photo URL of the currently connected user from Firestore.
@@ -48,6 +56,8 @@ function setupSockets(io) {
                     const data = userDoc.data();
                     if (data?.displayName) userName = data.displayName;
                     if (data?.photoURL) photoURL = data.photoURL;
+                } else {
+                    console.warn(`⚠️ Usuario ${uid} no existe en Firestore`);
                 }
             } catch (error) {
                 console.error("Error while retrieving user data:", error);
@@ -85,11 +95,14 @@ function setupSockets(io) {
             // Esto previene duplicados cuando hay múltiples conexiones
             participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
             
-            // Ahora agregar el usuario una sola vez
-            participants[meetingId].push({ userId: uid, userName, photoURL });
-            
-            console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId}`);
-            console.log(`📋 Total participants in ${meetingId}: ${participants[meetingId].length}`);
+            // Validar que uid existe antes de agregar
+            if (uid) {
+                participants[meetingId].push({ userId: uid, userName, photoURL });
+                console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId}`);
+                console.log(`📋 Total participants in ${meetingId}: ${participants[meetingId].length}`);
+            } else {
+                console.error("❌ Intento de agregar participante sin uid");
+            }
 
             // Notify all users in the room
             io.to(meetingId).emit("user-joined", {
@@ -141,7 +154,7 @@ function setupSockets(io) {
          * @event disconnect
          */
         socket.on("disconnect", async () => {
-            console.log("Disconnected", socket.id, "uid:", uid);
+            console.log("🔌 Disconnected", socket.id, "uid:", uid);
             const userData = await getUserData();
             const userName = userData.userName;
 
