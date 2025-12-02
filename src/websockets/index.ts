@@ -109,13 +109,14 @@ function setupSockets(io) {
                 console.error("❌ Attempt to add participant without uid");
             }
 
-            // Notify all users in the room
-            io.to(meetingId).emit("user-joined", {
+            // Notify only OTHER users in the room (not the user who just joined)
+            socket.broadcast.to(meetingId).emit("user-joined", {
                 userId: uid,
                 userName,
                 photoURL
             });
 
+            // Send participants list to ALL users
             io.to(meetingId).emit("participants", participants[meetingId]);
         });
 
@@ -135,15 +136,16 @@ function setupSockets(io) {
                 
                 console.log(`🎤 ${participant.userName} (${uid}) updated media: muted=${isMuted}, videoOff=${isVideoOff}`);
                 
-                // Notify all users in the room
+                // Notify all users in the room about the media state change
                 io.to(meetingId).emit("media-state-updated", {
                     userId: uid,
                     isMuted,
                     isVideoOff
                 });
                 
-                // Send updated participants list
-                io.to(meetingId).emit("participants", participants[meetingId]);
+                // ⚠️ REMOVED: Don't send participants list here to avoid race conditions
+                // The media-state-updated event is sufficient and more specific
+                // io.to(meetingId).emit("participants", participants[meetingId]);
             }
         });
 
