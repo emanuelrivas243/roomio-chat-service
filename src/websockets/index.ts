@@ -14,10 +14,10 @@ const { db } = require("../firebase");
  * 
  * Structure:
  * {
- *   [meetingId]: [{ userId: string, userName: string }]
+ *   [meetingId]: [{ userId: string, userName: string, photoURL: string|null }]
  * }
  *
- * @type {Object.<string, Array<{userId: string, userName: string}>>}
+ * @type {Object.<string, Array<{userId: string, userName: string, photoURL: string|null}>>}
  */
 const participants = {};
 
@@ -33,59 +33,73 @@ function setupSockets(io) {
         console.log("Connected", socket.id, "uid:", uid);
 
         /**
-         * Retrieves the display name of the currently connected user from Firestore.
+         * Retrieves the display name and photo URL of the currently connected user from Firestore.
          *
          * @async
-         * @function getUserName
-         * @returns {Promise<string>} Display name of the user.
+         * @function getUserData
+         * @returns {Promise<{userName: string, photoURL: string|null}>} User data.
          */
-        const getUserName = async () => {
+        const getUserData = async () => {
             let userName = "User";
+            let photoURL = null;
             try {
                 const userDoc = await db.collection("users").doc(uid).get();
                 if (userDoc.exists) {
                     const data = userDoc.data();
                     if (data?.displayName) userName = data.displayName;
+                    if (data?.photoURL) photoURL = data.photoURL;
                 }
             } catch (error) {
-                console.error("Error while retrieving user name:", error);
+                console.error("Error while retrieving user data:", error);
             }
-            return userName;
+            return { userName, photoURL };
         };
 
         /**
          * Triggered when a user joins a meeting room.
          *
          * @event join-meeting
-         * @param {string} meetingId - ID of the meeting room the user joins.
+         * @param {string|{meetingId: string, photoURL: string|null}} data - Meeting ID or object with meetingId and photoURL.
          */
-        socket.on("join-meeting", async (meetingId) => {
+        socket.on("join-meeting", async (data) => {
+            // Support both old format (string) and new format (object)
+            const meetingId = typeof data === 'string' ? data : data.meetingId;
+            const clientPhotoURL = typeof data === 'object' ? data.photoURL : null;
+
             socket.join(meetingId);
 
             // Send chat history
             const history = await MessageDAO.getMessages(meetingId);
             socket.emit("chat-history", history);
 
-            const userName = await getUserName();
+            const userData = await getUserData();
+            const userName = userData.userName;
+            // Prefer client-provided photoURL, fallback to Firestore
+            const photoURL = clientPhotoURL || userData.photoURL;
 
             if (!participants[meetingId]) {
                 participants[meetingId] = [];
             }
 
             // Add participant if not already inside
-            if (!participants[meetingId].some(u => u.userId === uid)) {
-                participants[meetingId].push({ userId: uid, userName });
+            const existingIndex = participants[meetingId].findIndex(u => u.userId === uid);
+            if (existingIndex === -1) {
+                participants[meetingId].push({ userId: uid, userName, photoURL });
+            } else {
+                // Update existing participant data
+                participants[meetingId][existingIndex] = { userId: uid, userName, photoURL };
             }
 
             // Notify all users in the room
             io.to(meetingId).emit("user-joined", {
                 userId: uid,
-                userName
+                userName,
+                photoURL
             });
 
             io.to(meetingId).emit("participants", participants[meetingId]);
 
-            console.log(`User ${uid} joined meeting ${meetingId}`);
+            console.log(`User ${uid} (${userName}) joined meeting ${meetingId}`);
         });
 
         /**
@@ -129,7 +143,8 @@ function setupSockets(io) {
          */
         socket.on("disconnect", async () => {
             console.log("Disconnected", socket.id);
-            const userName = await getUserName();
+            const userData = await getUserData();
+            const userName = userData.userName;
 
             // Remove user from all meetings they were in
             for (const meetingId of Object.keys(participants)) {
