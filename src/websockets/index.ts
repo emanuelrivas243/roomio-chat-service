@@ -31,9 +31,9 @@ function setupSockets(io) {
     io.on("connection", (socket) => {
         const uid = socket.handshake.query.uid;
         
-        // ✅ VALIDACIÓN CRÍTICA: Rechazar conexiones sin uid válido
+        // ✅ CRITICAL VALIDATION: Reject connections without a valid uid
         if (!uid || uid === 'undefined' || uid === 'null') {
-            console.error("❌ Conexión rechazada: uid inválido", socket.id);
+            console.error("❌ Connection rejected: invalid uid", socket.id);
             socket.disconnect(true);
             return;
         }
@@ -57,7 +57,7 @@ function setupSockets(io) {
                     if (data?.displayName) userName = data.displayName;
                     if (data?.photoURL) photoURL = data.photoURL;
                 } else {
-                    console.warn(`⚠️ Usuario ${uid} no existe en Firestore`);
+                    console.warn(`⚠️ User ${uid} doesn't exist in Firestore`);
                 }
             } catch (error) {
                 console.error("Error while retrieving user data:", error);
@@ -91,17 +91,14 @@ function setupSockets(io) {
                 participants[meetingId] = [];
             }
 
-            // CRÍTICO: Eliminar TODAS las instancias previas del usuario antes de agregar
-            // Esto previene duplicados cuando hay múltiples conexiones
             participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
             
-            // Validar que uid existe antes de agregar
             if (uid) {
                 participants[meetingId].push({ userId: uid, userName, photoURL });
                 console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId}`);
                 console.log(`📋 Total participants in ${meetingId}: ${participants[meetingId].length}`);
             } else {
-                console.error("❌ Intento de agregar participante sin uid");
+                console.error("❌ Attempt to add participant without uid");
             }
 
             // Notify all users in the room
@@ -162,7 +159,7 @@ function setupSockets(io) {
             for (const meetingId of Object.keys(participants)) {
                 const beforeCount = participants[meetingId].length;
 
-                // Eliminar todas las instancias del usuario
+                // Delete all instances of the user
                 participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
 
                 const afterCount = participants[meetingId].length;
