@@ -14,10 +14,10 @@ const { db } = require("../firebase");
  * 
  * Structure:
  * {
- *   [meetingId]: [{ userId: string, userName: string, photoURL: string|null }]
+ *   [meetingId]: [{ userId: string, userName: string, photoURL: string|null, isMuted: boolean, isVideoOff: boolean }]
  * }
  *
- * @type {Object.<string, Array<{userId: string, userName: string, photoURL: string|null}>>}
+ * @type {Object.<string, Array<{userId: string, userName: string, photoURL: string|null, isMuted: boolean, isVideoOff: boolean}>>}
  */
 const participants = {};
 
@@ -69,12 +69,14 @@ function setupSockets(io) {
          * Triggered when a user joins a meeting room.
          *
          * @event join-meeting
-         * @param {string|{meetingId: string, photoURL: string|null}} data - Meeting ID or object with meetingId and photoURL.
+         * @param {string|{meetingId: string, photoURL: string|null, isMuted: boolean, isVideoOff: boolean}} data - Meeting ID or object with meetingId, photoURL, and media states.
          */
         socket.on("join-meeting", async (data) => {
             // Support both old format (string) and new format (object)
             const meetingId = typeof data === 'string' ? data : data.meetingId;
             const clientPhotoURL = typeof data === 'object' ? data.photoURL : null;
+            const isMuted = typeof data === 'object' && data.isMuted !== undefined ? data.isMuted : true;
+            const isVideoOff = typeof data === 'object' && data.isVideoOff !== undefined ? data.isVideoOff : true;
 
             socket.join(meetingId);
 
@@ -94,8 +96,14 @@ function setupSockets(io) {
             participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
             
             if (uid) {
-                participants[meetingId].push({ userId: uid, userName, photoURL });
-                console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId}`);
+                participants[meetingId].push({ 
+                    userId: uid, 
+                    userName, 
+                    photoURL,
+                    isMuted,
+                    isVideoOff
+                });
+                console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId} [Muted: ${isMuted}, VideoOff: ${isVideoOff}]`);
                 console.log(`📋 Total participants in ${meetingId}: ${participants[meetingId].length}`);
             } else {
                 console.error("❌ Attempt to add participant without uid");
@@ -109,6 +117,34 @@ function setupSockets(io) {
             });
 
             io.to(meetingId).emit("participants", participants[meetingId]);
+        });
+
+        /**
+         * Triggered when a user updates their media state (microphone/camera).
+         *
+         * @event update-media-state
+         * @param {{ meetingId: string, isMuted: boolean, isVideoOff: boolean }} data - Media state payload.
+         */
+        socket.on("update-media-state", ({ meetingId, isMuted, isVideoOff }) => {
+            if (!participants[meetingId]) return;
+            
+            const participant = participants[meetingId].find(p => p.userId === uid);
+            if (participant) {
+                participant.isMuted = isMuted;
+                participant.isVideoOff = isVideoOff;
+                
+                console.log(`🎤 ${participant.userName} (${uid}) updated media: muted=${isMuted}, videoOff=${isVideoOff}`);
+                
+                // Notify all users in the room
+                io.to(meetingId).emit("media-state-updated", {
+                    userId: uid,
+                    isMuted,
+                    isVideoOff
+                });
+                
+                // Send updated participants list
+                io.to(meetingId).emit("participants", participants[meetingId]);
+            }
         });
 
         /**
