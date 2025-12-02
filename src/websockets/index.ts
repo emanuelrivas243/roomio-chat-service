@@ -81,14 +81,15 @@ function setupSockets(io) {
                 participants[meetingId] = [];
             }
 
-            // Add participant if not already inside
-            const existingIndex = participants[meetingId].findIndex(u => u.userId === uid);
-            if (existingIndex === -1) {
-                participants[meetingId].push({ userId: uid, userName, photoURL });
-            } else {
-                // Update existing participant data
-                participants[meetingId][existingIndex] = { userId: uid, userName, photoURL };
-            }
+            // CRÍTICO: Eliminar TODAS las instancias previas del usuario antes de agregar
+            // Esto previene duplicados cuando hay múltiples conexiones
+            participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
+            
+            // Ahora agregar el usuario una sola vez
+            participants[meetingId].push({ userId: uid, userName, photoURL });
+            
+            console.log(`✅ User ${userName} (${uid}) joined meeting ${meetingId}`);
+            console.log(`📋 Total participants in ${meetingId}: ${participants[meetingId].length}`);
 
             // Notify all users in the room
             io.to(meetingId).emit("user-joined", {
@@ -98,8 +99,6 @@ function setupSockets(io) {
             });
 
             io.to(meetingId).emit("participants", participants[meetingId]);
-
-            console.log(`User ${uid} (${userName}) joined meeting ${meetingId}`);
         });
 
         /**
@@ -142,28 +141,29 @@ function setupSockets(io) {
          * @event disconnect
          */
         socket.on("disconnect", async () => {
-            console.log("Disconnected", socket.id);
+            console.log("Disconnected", socket.id, "uid:", uid);
             const userData = await getUserData();
             const userName = userData.userName;
 
             // Remove user from all meetings they were in
             for (const meetingId of Object.keys(participants)) {
-                const beforeList = participants[meetingId];
-                const beforeCount = beforeList.length;
+                const beforeCount = participants[meetingId].length;
 
-                participants[meetingId] = beforeList.filter(p => p.userId !== uid);
+                // Eliminar todas las instancias del usuario
+                participants[meetingId] = participants[meetingId].filter(p => p.userId !== uid);
 
                 const afterCount = participants[meetingId].length;
 
                 if (beforeCount !== afterCount) {
+                    console.log(`❌ User ${userName} (${uid}) left meeting ${meetingId}`);
+                    console.log(`📋 Remaining participants: ${afterCount}`);
+
                     io.to(meetingId).emit("user-left", {
                         userId: uid,
                         userName
                     });
 
                     io.to(meetingId).emit("participants", participants[meetingId]);
-
-                    console.log(`User ${userName} (${uid}) left meeting ${meetingId}`);
                 }
             }
         });
