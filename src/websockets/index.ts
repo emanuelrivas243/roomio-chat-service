@@ -150,6 +150,23 @@ function setupSockets(io) {
         });
 
         /**
+         * Triggered when a user broadcasts their video socket ID for WebRTC stream mapping.
+         * This allows other participants to map Firebase UIDs to video server socket IDs.
+         *
+         * @event video-socket-mapping
+         * @param {{ meetingId: string, userId: string, videoSocketId: string }} data - Video socket mapping payload.
+         */
+        socket.on("video-socket-mapping", ({ meetingId, userId, videoSocketId }) => {
+            console.log(`📹 Video socket mapping: ${userId} -> ${videoSocketId} in meeting ${meetingId}`);
+            
+            // Broadcast to ALL participants in the meeting (including sender for consistency)
+            io.to(meetingId).emit("video-socket-mapping", {
+                userId,
+                videoSocketId
+            });
+        });
+
+        /**
          * Triggered when a user sends a chat message.
          *
          * @event send-message
